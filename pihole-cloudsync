@@ -30,7 +30,7 @@ update='April 2, 2020'
 # Project Home: https://github.com/stevejenkins/pihole-cloudsync
 ###########################################################################
 # CONSTANTS
-pihole_version=4
+pihole_version=5
 personal_git_dir='/usr/local/bin/my-pihole-lists'
 pihole_dir='/etc/pihole'
 ad_list='adlists.list'
@@ -41,9 +41,14 @@ regex_list='regex.list'
 gravity_db='gravity.db'
 custom_list='custom.list'
 ###########################################################################
+# FOR DHCP_BACKUP MODE ONLY
+# RE-INITIALIZE WITH --initpush OR --initpull AFTER ENABLING THIS MODE
+enable_dhcp_backup=on
+dnsmasq_dir='/etc/dnsmasq.d'
+###########################################################################
 # FOR SHARED HOSTS MODE ONLY
 # RE-INITIALIZE WITH --initpush OR --initpull AFTER ENABLING THIS MODE
-enable_hosts=off
+enable_hosts=on
 local_hosts='/etc/hosts'
 shared_hosts='sharedhosts.txt'
 ###########################################################################
@@ -64,6 +69,15 @@ else
 	echo "Shared Hosts Mode DISABLED.";
 fi
 
+# Case-insensitive check for Shared Hosts Mode
+dhcp_backup_mode=''
+if [ $(echo "$enable_dhcp_backup" |tr [:upper:] [:lower:]) == "yes" ] || [ $(echo "$enable_dhcp_backup" |tr [:upper:] [:lower:]) == "y" ] || [ $(echo "$enable_dhcp_backup" | tr [:upper:] [:lower:]) == "on" ] || [ $(echo "$enable_hosts" |tr [:upper:] [:lower:]) == "true" ] || [ $(echo "$enable_hosts" |tr [:upper:] [:lower:]) == "1" ]; then
+  dhcp_backup_mode='1'
+  echo "DHCP Backup Mode ENABLED.";
+else
+  echo "DHCP Backup Mode DISABLED.";
+fi
+
 # FUNCTIONS
 push_initialize () {
 	cd $pihole_dir || exit
@@ -79,6 +93,12 @@ push_initialize () {
 		$SUDO sed -n '/# SHARED HOSTS - START/,/# SHARED HOSTS - END/p' $local_hosts | $SUDO sed '1d;$d' > /tmp/$shared_hosts
 		$SUDO cp /tmp/$shared_hosts $personal_git_dir
 	fi
+
+  if [ "$dhcp_backup_mode" ]; then
+    cd $dnsmasq_dir || exit
+    $SUDO cp -r ../dnsmqsq.d $personal_git_dir
+  fi
+
 	cd $personal_git_dir || exit
 	$SUDO git add .
 	echo "Local Pi-hole initialized in Push mode and local lists were added to local Git repo. Run 'pihole-cloudsync --push' to push to remote Git repo.";
@@ -104,6 +124,7 @@ pull_initialize () {
 		--in-place=.bak /tmp/hosts
 		$SUDO mv /tmp/hosts $local_hosts
 	fi
+
 	$SUDO pihole -g
 	echo "Local Pi-hole initialized in Pull mode and first pull successfully completed.";
 	echo "Future pulls can now be perfomed with 'pihole-cloudsync --pull'.";
@@ -120,6 +141,12 @@ push () {
 		$SUDO sed -n '/# SHARED HOSTS - START/,/# SHARED HOSTS - END/p' $local_hosts | $SUDO sed '1d;$d' > /tmp/$shared_hosts
 		$SUDO cp /tmp/$shared_hosts $personal_git_dir
 	fi
+
+  if [ "$dhcp_backup_mode" ]; then
+    cd $dnsmasq_dir || exit
+    $SUDO cp -r ../dnsmqsq.d $personal_git_dir
+  fi
+
 	cd $personal_git_dir || exit
 	$SUDO git remote update > /dev/null
         CHANGED=$($SUDO git --work-tree=$personal_git_dir status --porcelain)
