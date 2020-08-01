@@ -31,7 +31,7 @@ update='April 2, 2020'
 ###########################################################################
 # CONSTANTS
 pihole_version=5
-personal_git_dir='/usr/local/bin/my-pihole-lists'
+personal_git_dir='/home/pi/my-pihole-lists'
 pihole_dir='/etc/pihole'
 ad_list='adlists.list'
 black_list='black.list'
@@ -96,7 +96,7 @@ push_initialize () {
 
   if [ "$dhcp_backup_mode" ]; then
     cd $dnsmasq_dir || exit
-    $SUDO cp -r ../dnsmqsq.d $personal_git_dir
+    $SUDO cp -r ../dnsmasq.d $personal_git_dir
   fi
 
 	cd $personal_git_dir || exit
@@ -144,7 +144,7 @@ push () {
 
   if [ "$dhcp_backup_mode" ]; then
     cd $dnsmasq_dir || exit
-    $SUDO cp -r ../dnsmqsq.d $personal_git_dir
+    $SUDO cp -r ../dnsmasq.d $personal_git_dir
   fi
 
 	cd $personal_git_dir || exit
