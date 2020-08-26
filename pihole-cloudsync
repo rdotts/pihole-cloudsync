@@ -4,6 +4,20 @@
 # pihole-cloudsync
 # Helper script to keep multiple Pi-holes' lists synchronized via Git
 
+# This fork also backs up DNSMasq from the "Push" host, and syncs
+# dnsmasq.d/05-local-dns-records.conf to allow records other than
+# A/AAAA to be synced (requires both Shared Hosts Mode and DHCP Backup
+# Mode to be enabled).
+
+# Forked by Ryan Dotts, who should probably learn how to fork and do version
+# numbers and stuff the right way
+# https://github.com/rdotts/pihole-cloudsync
+
+# TODO: Backup dnsmasq into seperate directories for dhcp enabled/disabled while
+# always syncing 05-local-dns-records.conf
+# TODO: Look into feasability of having 2 (or more?)pi holes pull
+# while pushing manually after changing configs or adding/deleting hosts
+
 # Version 4.0 - March 28, 2020 - Steve Jenkins (stevejenkins.com)
 version='4.1'
 update='April 2, 2020'
@@ -27,7 +41,12 @@ update='April 2, 2020'
 #  'pihole-cloudsync --push' will push (upload) your lists to a remote Git repo
 #  'pihole-cloudsync --pull' will pull (download) your lists from a remote Git repo
 
-# Project Home: https://github.com/stevejenkins/pihole-cloudsync
+# If both Shared Hosts and DNSMasq Backup are enabled, pihole-cloudsync will
+# also copy dnsmasq.d/05-local-dns-records.conf on the pulling server
+# This allows DNS records other than A/AAAA from the hosts file, such as SRV
+# or CNAME records, to be shared in a split horizon DNS situation.
+
+# Project Upstream: https://github.com/stevejenkins/pihole-cloudsync
 ###########################################################################
 # CONSTANTS
 pihole_version=5
@@ -41,9 +60,9 @@ regex_list='regex.list'
 gravity_db='gravity.db'
 custom_list='custom.list'
 ###########################################################################
-# FOR DHCP_BACKUP MODE ONLY
+# FOR DNSMASQ_BACKUP MODE ONLY
 # RE-INITIALIZE WITH --initpush OR --initpull AFTER ENABLING THIS MODE
-enable_dhcp_backup=on
+enable_dnsmasq_backup=on
 dnsmasq_dir='/etc/dnsmasq.d'
 ###########################################################################
 # FOR SHARED HOSTS MODE ONLY
@@ -69,10 +88,10 @@ else
 	echo "Shared Hosts Mode DISABLED.";
 fi
 
-# Case-insensitive check for Shared Hosts Mode
-dhcp_backup_mode=''
-if [ $(echo "$enable_dhcp_backup" |tr [:upper:] [:lower:]) == "yes" ] || [ $(echo "$enable_dhcp_backup" |tr [:upper:] [:lower:]) == "y" ] || [ $(echo "$enable_dhcp_backup" | tr [:upper:] [:lower:]) == "on" ] || [ $(echo "$enable_hosts" |tr [:upper:] [:lower:]) == "true" ] || [ $(echo "$enable_hosts" |tr [:upper:] [:lower:]) == "1" ]; then
-  dhcp_backup_mode='1'
+# Case-insensitive check for DNSMasq Mode
+dnsmasq_backup_mode=''
+if [ $(echo "$enable_dnsmasq_backup" |tr [:upper:] [:lower:]) == "yes" ] || [ $(echo "$enable_dnsmasq_backup" |tr [:upper:] [:lower:]) == "y" ] || [ $(echo "$enable_dnsmasq_backup" | tr [:upper:] [:lower:]) == "on" ] || [ $(echo "$enable_hosts" |tr [:upper:] [:lower:]) == "true" ] || [ $(echo "$enable_hosts" |tr [:upper:] [:lower:]) == "1" ]; then
+  dnsmasq_backup_mode='1'
   echo "DHCP Backup Mode ENABLED.";
 else
   echo "DHCP Backup Mode DISABLED.";
@@ -94,7 +113,7 @@ push_initialize () {
 		$SUDO cp /tmp/$shared_hosts $personal_git_dir
 	fi
 
-  if [ "$dhcp_backup_mode" ]; then
+  if [ "$dnsmasq_backup_mode" ]; then
     cd $dnsmasq_dir || exit
     $SUDO cp -r ../dnsmasq.d $personal_git_dir
   fi
@@ -142,7 +161,7 @@ push () {
 		$SUDO cp /tmp/$shared_hosts $personal_git_dir
 	fi
 
-  if [ "$dhcp_backup_mode" ]; then
+  if [ "$dnsmasq_backup_mode" ]; then
     cd $dnsmasq_dir || exit
     $SUDO cp -r ../dnsmasq.d $personal_git_dir
   fi
@@ -186,6 +205,9 @@ pull () {
 			-e "/# SHARED HOSTS - START.*$/r $shared_hosts" \
 			--in-place=.bak /tmp/hosts
 			$SUDO mv /tmp/hosts $local_hosts
+			if [ "$dnsmasq_backup_mode" ] && [ -f $personal_git_dir/dnsmasq.d/05-local-dns-records.conf ]; then
+    				$SUDO cp  $personal_git_dir/dnsmasq.d/05-local-dns-records.conf $dnsmasq_dir
+  			fi
 		fi
 		$SUDO pihole -g
                 echo 'Done!';
